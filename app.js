@@ -5,6 +5,9 @@ const bcrypt = require("bcrypt");
 
 const db = require("./config/db");
 
+const authRoutes = require("./routes/authRoutes");
+const dashboardRoutes = require("./routes/dashboardRoutes");
+
 const app = express();
 
 app.use(express.urlencoded({ extended: true }));
@@ -15,6 +18,9 @@ app.use(session({
     resave: false,
     saveUninitialized: false
 }));
+
+app.use(authRoutes);
+app.use(dashboardRoutes);
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
