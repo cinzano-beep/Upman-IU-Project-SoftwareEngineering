@@ -1,14 +1,16 @@
 {
   "name": "updatemanager",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "Webbasierter Update Manager für Haushaltsgeräte",
+  "main": "app.js",
   "scripts": {
     "start": "node app.js"
   },
-  "keywords": [],
-  "author": "",
+  "engines": {
+    "node": "20.x"
+  },
+  "author": "Upman Team",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "bcrypt": "^6.0.0",
     "ejs": "^4.0.1",
