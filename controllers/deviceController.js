@@ -1,5 +1,9 @@
 const db = require("../config/db");
 
+function forbidden(res) {
+    return res.status(403).send("403 Forbidden – Zugriff verweigert");
+}
+
 exports.listDevices = (req, res) => {
     const user = req.session.user;
 
@@ -7,9 +11,18 @@ exports.listDevices = (req, res) => {
     let params = [];
 
     if (user.role === "admin") {
-        query = "SELECT devices.*, users.username FROM devices JOIN users ON devices.user_id = users.id";
+        query = `
+            SELECT devices.*, users.username 
+            FROM devices 
+            JOIN users ON devices.user_id = users.id
+        `;
     } else {
-        query = "SELECT devices.*, users.username FROM devices JOIN users ON devices.user_id = users.id WHERE user_id = ?";
+        query = `
+            SELECT devices.*, users.username 
+            FROM devices 
+            JOIN users ON devices.user_id = users.id
+            WHERE user_id = ?
+        `;
         params = [user.id];
     }
 
@@ -41,9 +54,15 @@ exports.addDevice = (req, res) => {
 
 exports.showEditForm = (req, res) => {
     const deviceId = req.params.id;
+    const user = req.session.user;
 
     db.get("SELECT * FROM devices WHERE id = ?", [deviceId], (err, device) => {
         if (err || !device) return res.send("Gerät nicht gefunden");
+
+        // 🔒 Ownership-Check
+        if (user.role !== "admin" && device.user_id !== user.id) {
+            return forbidden(res);
+        }
 
         res.render("edit-device", { device });
     });
@@ -51,25 +70,45 @@ exports.showEditForm = (req, res) => {
 
 exports.updateDevice = (req, res) => {
     const deviceId = req.params.id;
+    const user = req.session.user;
     const { name, type, software_version, update_status } = req.body;
 
-    db.run(
-        "UPDATE devices SET name = ?, type = ?, software_version = ?, update_status = ? WHERE id = ?",
-        [name, type, software_version, update_status, deviceId],
-        (err) => {
-            if (err) return res.send("Fehler beim Aktualisieren");
+    db.get("SELECT * FROM devices WHERE id = ?", [deviceId], (err, device) => {
+        if (err || !device) return res.send("Gerät nicht gefunden");
 
-            res.redirect("/devices");
+        // 🔒 Ownership-Check
+        if (user.role !== "admin" && device.user_id !== user.id) {
+            return forbidden(res);
         }
-    );
+
+        db.run(
+            "UPDATE devices SET name = ?, type = ?, software_version = ?, update_status = ? WHERE id = ?",
+            [name, type, software_version, update_status, deviceId],
+            (err) => {
+                if (err) return res.send("Fehler beim Aktualisieren");
+
+                res.redirect("/devices");
+            }
+        );
+    });
 };
 
 exports.deleteDevice = (req, res) => {
     const deviceId = req.params.id;
+    const user = req.session.user;
 
-    db.run("DELETE FROM devices WHERE id = ?", [deviceId], (err) => {
-        if (err) return res.send("Fehler beim Löschen");
+    db.get("SELECT * FROM devices WHERE id = ?", [deviceId], (err, device) => {
+        if (err || !device) return res.send("Gerät nicht gefunden");
 
-        res.redirect("/devices");
+        // 🔒 Ownership-Check
+        if (user.role !== "admin" && device.user_id !== user.id) {
+            return forbidden(res);
+        }
+
+        db.run("DELETE FROM devices WHERE id = ?", [deviceId], (err) => {
+            if (err) return res.send("Fehler beim Löschen");
+
+            res.redirect("/devices");
+        });
     });
 };
