@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Geräte</title>
+</head>
+<body>
+    <h2>Geräteübersicht</h2>
+
+    <a href="/devices/add">Neues Gerät hinzufügen</a>
+    <a href="/dashboard">Zurück zum Dashboard</a>
+
+    <table border="1">
+        <tr>
+            <th>Name</th>
+            <th>Typ</th>
+            <th>Version</th>
+            <th>Status</th>
+            <th>Besitzer</th>
+            <th>Aktionen</th>
+        </tr>
+
+        <% devices.forEach(device => { %>
+            <tr>
+                <td><%= device.name %></td>
+                <td><%= device.type %></td>
+                <td><%= device.software_version %></td>
+                <td><%= device.update_status %></td>
+                <td><%= device.username %></td>
+                <td>
+                    <a href="/devices/edit/<%= device.id %>">Bearbeiten</a>
+                    <form action="/devices/delete/<%= device.id %>" method="POST" style="display:inline;">
+                        <button type="submit">Löschen</button>
+                    </form>
+                </td>
+            </tr>
+        <% }) %>
+    </table>
+
+</body>
+</html>

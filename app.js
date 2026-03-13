@@ -7,8 +7,13 @@ const db = require("./config/db");
 
 const authRoutes = require("./routes/authRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const deviceRoutes = require("./routes/deviceRoutes");
 
 const app = express();
+
+/* =========================
+   Middleware
+========================= */
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -19,14 +24,21 @@ app.use(session({
     saveUninitialized: false
 }));
 
-app.use(authRoutes);
-app.use(dashboardRoutes);
-
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 app.use(express.static("public"));
 
-/* DB Initialisierung */
+/* =========================
+   Routen (NACH Session!)
+========================= */
+
+app.use(authRoutes);
+app.use(dashboardRoutes);
+app.use(deviceRoutes);
+
+/* =========================
+   Datenbank-Initialisierung
+========================= */
 
 db.serialize(() => {
 
@@ -52,7 +64,7 @@ db.serialize(() => {
         )
     `);
 
-    // Admin-User erstellen (falls nicht vorhanden)
+    // Admin-User automatisch anlegen (falls nicht vorhanden)
     const adminPassword = bcrypt.hashSync("admin123", 10);
 
     db.get("SELECT * FROM users WHERE username = ?", ["admin"], (err, row) => {
@@ -67,13 +79,17 @@ db.serialize(() => {
 
 });
 
-/*  Test-Route */
+/* =========================
+   Root Route
+========================= */
 
 app.get("/", (req, res) => {
-    res.send("Update Manager läuft 🚀");
+    res.redirect("/login");
 });
 
-/*  Server starten */
+/* =========================
+   Server Start
+========================= */
 
 const PORT = process.env.PORT || 3000;
 

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gerät bearbeiten</title>
+</head>
+<body>
+
+<h2>Gerät bearbeiten</h2>
+
+<form method="POST" action="/devices/edit/<%= device.id %>">
+    <input type="text" name="name" value="<%= device.name %>" required />
+    <input type="text" name="type" value="<%= device.type %>" required />
+    <input type="text" name="software_version" value="<%= device.software_version %>" />
+
+    <select name="update_status">
+        <option value="up-to-date" <%= device.update_status === 'up-to-date' ? 'selected' : '' %>>Up-to-date</option>
+        <option value="update-available" <%= device.update_status === 'update-available' ? 'selected' : '' %>>Update verfügbar</option>
+        <option value="critical" <%= device.update_status === 'critical' ? 'selected' : '' %>>Kritisch</option>
+    </select>
+
+    <button type="submit">Aktualisieren</button>
+</form>
+
+<a href="/devices">Zurück</a>
+
+</body>
+</html>
