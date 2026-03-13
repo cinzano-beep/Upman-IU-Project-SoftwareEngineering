@@ -1,54 +1,91 @@
 const db = require("../config/db");
+const axios = require("axios");
 
-exports.showDashboard = (req, res) => {
+const NVD_API = "https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=5";
+
+exports.dashboard = async (req, res) => {
     const user = req.session.user;
 
-    const stats = {
-        totalDevices: 0,
-        criticalUpdates: 0,
-        totalUsers: 0
-    };
+    try {
 
-    const queries = [];
+        /* ============================= */
+        /* Geräte-Statistiken */
+        /* ============================= */
 
-    if (user.role === "admin") {
-        queries.push(new Promise((resolve) => {
-            db.get("SELECT COUNT(*) as count FROM devices", (err, row) => {
-                stats.totalDevices = row?.count || 0;
-                resolve();
-            });
-        }));
+        let query = "";
+        let params = [];
 
-        queries.push(new Promise((resolve) => {
-            db.get("SELECT COUNT(*) as count FROM devices WHERE update_status = 'critical'", (err, row) => {
-                stats.criticalUpdates = row?.count || 0;
-                resolve();
-            });
-        }));
+        if (user.role === "admin") {
+            query = "SELECT * FROM devices";
+        } else {
+            query = "SELECT * FROM devices WHERE user_id = ?";
+            params = [user.id];
+        }
 
-        queries.push(new Promise((resolve) => {
-            db.get("SELECT COUNT(*) as count FROM users", (err, row) => {
-                stats.totalUsers = row?.count || 0;
-                resolve();
+        const devices = await new Promise((resolve, reject) => {
+            db.all(query, params, (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows);
             });
-        }));
-    } else {
-        queries.push(new Promise((resolve) => {
-            db.get("SELECT COUNT(*) as count FROM devices WHERE user_id = ?", [user.id], (err, row) => {
-                stats.totalDevices = row?.count || 0;
-                resolve();
-            });
-        }));
+        });
 
-        queries.push(new Promise((resolve) => {
-            db.get("SELECT COUNT(*) as count FROM devices WHERE user_id = ? AND update_status = 'critical'", [user.id], (err, row) => {
-                stats.criticalUpdates = row?.count || 0;
-                resolve();
+        const stats = {
+            totalDevices: devices.length,
+            criticalDevices: devices.filter(d => d.update_status === "critical").length,
+            updateAvailableDevices: devices.filter(d => d.update_status === "update-available").length
+        };
+
+        /* ============================= */
+        /* Benutzeranzahl (nur Admin) */
+        /* ============================= */
+
+        let totalUsers = 0;
+
+        if (user.role === "admin") {
+            totalUsers = await new Promise((resolve, reject) => {
+                db.get("SELECT COUNT(*) as count FROM users", (err, row) => {
+                    if (err) reject(err);
+                    else resolve(row.count);
+                });
             });
-        }));
+        }
+
+        /* ============================= */
+        /* NVD API – Aktuelle CVEs */
+        /* ============================= */
+
+        let advisories = [];
+
+        try {
+            const response = await axios.get(NVD_API);
+
+            const cves = response.data.vulnerabilities;
+
+            advisories = cves.map(item => ({
+                id: item.cve.id,
+                description: item.cve.descriptions?.[0]?.value || "Keine Beschreibung verfügbar",
+                published: item.cve.published
+            }));
+
+        } catch (apiError) {
+            console.error("NVD API Fehler:", apiError.message);
+            advisories = [];
+        }
+
+        /* ============================= */
+        /* Render */
+        /* ============================= */
+
+        res.render("dashboard", {
+            user,
+            stats,
+            totalUsers,
+            advisories,
+            appName: "Upman"
+        });
+
+    } catch (error) {
+        console.error("Dashboard Fehler:", error);
+        res.status(500).send("Fehler beim Laden des Dashboards");
     }
-
-    Promise.all(queries).then(() => {
-        res.render("dashboard", { user, stats });
-    });
 };
