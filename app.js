@@ -11,34 +11,48 @@ const deviceRoutes = require("./routes/deviceRoutes");
 
 const app = express();
 
-/* =========================
-   Middleware
-========================= */
+/* ============================= */
+/* Middleware */
+/* ============================= */
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 app.use(session({
-    secret: "supersecretkey",
+    name: "upman_session",
+    secret: process.env.SESSION_SECRET || "supersecretkey",
     resave: false,
-    saveUninitialized: false
+    saveUninitialized: false,
+    cookie: {
+        maxAge: 1000 * 60 * 60 * 4, // 4 Stunden eingeloggt bleiben
+        httpOnly: true,
+        secure: false,
+        sameSite: "lax"
+    }
 }));
+
+/* Globaler Projektname */
+app.locals.appName = "Upman";
+
+/* ============================= */
+/* View Engine */
+/* ============================= */
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 app.use(express.static("public"));
 
-/* =========================
-   Routen (NACH Session!)
-========================= */
+/* ============================= */
+/* Routes */
+/* ============================= */
 
 app.use(authRoutes);
 app.use(dashboardRoutes);
 app.use(deviceRoutes);
 
-/* =========================
-   Datenbank-Initialisierung
-========================= */
+/* ============================= */
+/* DB Initialisierung */
+/* ============================= */
 
 db.serialize(() => {
 
@@ -64,7 +78,7 @@ db.serialize(() => {
         )
     `);
 
-    // Admin-User automatisch anlegen (falls nicht vorhanden)
+    // Admin erstellen
     const adminPassword = bcrypt.hashSync("admin123", 10);
 
     db.get("SELECT * FROM users WHERE username = ?", ["admin"], (err, row) => {
@@ -73,23 +87,39 @@ db.serialize(() => {
                 "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
                 ["admin", adminPassword, "admin"]
             );
-            console.log("Admin-User erstellt (admin / admin123)");
+            console.log("Admin erstellt (admin / admin123)");
+        }
+    });
+
+    // Normaler User erstellen
+    const userPassword = bcrypt.hashSync("user123", 10);
+
+    db.get("SELECT * FROM users WHERE username = ?", ["user"], (err, row) => {
+        if (!row) {
+            db.run(
+                "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+                ["user", userPassword, "user"]
+            );
+            console.log("User erstellt (user / user123)");
         }
     });
 
 });
 
-/* =========================
-   Root Route
-========================= */
+/* ============================= */
+/* Root Redirect */
+/* ============================= */
 
 app.get("/", (req, res) => {
+    if (req.session.user) {
+        return res.redirect("/dashboard");
+    }
     res.redirect("/login");
 });
 
-/* =========================
-   Server Start
-========================= */
+/* ============================= */
+/* Server */
+/* ============================= */
 
 const PORT = process.env.PORT || 3000;
 

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Login – Update Manager</title>
+    <title><%= appName %> – Login</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <style>
@@ -24,9 +24,8 @@
             text-align: center;
         }
 
-        .login-card h1 {
+        h1 {
             margin-bottom: 10px;
-            font-size: 24px;
         }
 
         .subtitle {
@@ -41,14 +40,6 @@
             margin-bottom: 15px;
             border-radius: 6px;
             border: 1px solid #ddd;
-            font-size: 14px;
-            transition: 0.2s;
-        }
-
-        input:focus {
-            border-color: #3498db;
-            outline: none;
-            box-shadow: 0 0 0 2px rgba(52,152,219,0.2);
         }
 
         button {
@@ -58,9 +49,7 @@
             color: white;
             border: none;
             border-radius: 6px;
-            font-size: 14px;
             cursor: pointer;
-            transition: 0.2s;
         }
 
         button:hover {
@@ -87,7 +76,7 @@
 <body>
 
 <div class="login-card">
-    <h1>Update Manager</h1>
+    <h1><%= appName %></h1>
     <div class="subtitle">Bitte anmelden</div>
 
     <% if (typeof error !== 'undefined') { %>
@@ -97,7 +86,6 @@
     <form method="POST" action="/login">
         <input type="text" name="username" placeholder="Benutzername" required>
         <input type="password" name="password" placeholder="Passwort" required>
-
         <button type="submit">Anmelden</button>
     </form>
 
