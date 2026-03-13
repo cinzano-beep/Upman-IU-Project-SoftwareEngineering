@@ -2,26 +2,73 @@
 <html>
 <head>
     <title>Gerät bearbeiten</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f6f9;
+            margin: 0;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 60px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+
+        button {
+            padding: 10px 15px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        a {
+            display: inline-block;
+            margin-top: 15px;
+            text-decoration: none;
+            color: #555;
+        }
+
+    </style>
 </head>
 <body>
 
-<h2>Gerät bearbeiten</h2>
+<div class="container">
+    <h1>Gerät bearbeiten</h1>
 
-<form method="POST" action="/devices/edit/<%= device.id %>">
-    <input type="text" name="name" value="<%= device.name %>" required />
-    <input type="text" name="type" value="<%= device.type %>" required />
-    <input type="text" name="software_version" value="<%= device.software_version %>" />
+    <form method="POST" action="/devices/edit/<%= device.id %>">
+        <input type="text" name="name" value="<%= device.name %>" required>
+        <input type="text" name="type" value="<%= device.type %>" required>
+        <input type="text" name="software_version" value="<%= device.software_version %>">
 
-    <select name="update_status">
-        <option value="up-to-date" <%= device.update_status === 'up-to-date' ? 'selected' : '' %>>Up-to-date</option>
-        <option value="update-available" <%= device.update_status === 'update-available' ? 'selected' : '' %>>Update verfügbar</option>
-        <option value="critical" <%= device.update_status === 'critical' ? 'selected' : '' %>>Kritisch</option>
-    </select>
+        <select name="update_status">
+            <option value="up-to-date" <%= device.update_status === 'up-to-date' ? 'selected' : '' %>>Up-to-date</option>
+            <option value="update-available" <%= device.update_status === 'update-available' ? 'selected' : '' %>>Update verfügbar</option>
+            <option value="critical" <%= device.update_status === 'critical' ? 'selected' : '' %>>Kritisch</option>
+        </select>
 
-    <button type="submit">Aktualisieren</button>
-</form>
+        <button type="submit">Aktualisieren</button>
+    </form>
 
-<a href="/devices">Zurück</a>
+    <a href="/devices">Zurück zur Übersicht</a>
+</div>
 
 </body>
 </html>

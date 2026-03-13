@@ -1,40 +1,123 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Geräte</title>
-</head>
-<body>
-    <h2>Geräteübersicht</h2>
+const db = require("../config/db");
 
-    <a href="/devices/add">Neues Gerät hinzufügen</a>
-    <a href="/dashboard">Zurück zum Dashboard</a>
+function forbidden(res) {
+    return res.status(403).send("403 Forbidden – Zugriff verweigert");
+}
 
-    <table border="1">
-        <tr>
-            <th>Name</th>
-            <th>Typ</th>
-            <th>Version</th>
-            <th>Status</th>
-            <th>Besitzer</th>
-            <th>Aktionen</th>
-        </tr>
+exports.listDevices = (req, res) => {
+    const user = req.session.user;
 
-        <% devices.forEach(device => { %>
-            <tr>
-                <td><%= device.name %></td>
-                <td><%= device.type %></td>
-                <td><%= device.software_version %></td>
-                <td><%= device.update_status %></td>
-                <td><%= device.username %></td>
-                <td>
-                    <a href="/devices/edit/<%= device.id %>">Bearbeiten</a>
-                    <form action="/devices/delete/<%= device.id %>" method="POST" style="display:inline;">
-                        <button type="submit">Löschen</button>
-                    </form>
-                </td>
-            </tr>
-        <% }) %>
-    </table>
+    let query;
+    let params = [];
 
-</body>
-</html>
+    if (user.role === "admin") {
+        query = `
+            SELECT devices.*, users.username 
+            FROM devices 
+            JOIN users ON devices.user_id = users.id
+        `;
+    } else {
+        query = `
+            SELECT devices.*, users.username 
+            FROM devices 
+            JOIN users ON devices.user_id = users.id
+            WHERE user_id = ?
+        `;
+        params = [user.id];
+    }
+
+    db.all(query, params, (err, rows) => {
+        if (err) return res.status(500).send("Fehler beim Laden der Geräte");
+
+        res.render("devices", {
+            devices: rows,
+            user
+        });
+    });
+};
+
+exports.showAddForm = (req, res) => {
+    res.render("add-device", {
+        user: req.session.user
+    });
+};
+
+exports.addDevice = (req, res) => {
+    const { name, type, software_version, update_status } = req.body;
+    const userId = req.session.user.id;
+
+    if (!name || !type) {
+        return res.status(400).send("Name und Typ sind erforderlich");
+    }
+
+    db.run(
+        "INSERT INTO devices (user_id, name, type, software_version, update_status) VALUES (?, ?, ?, ?, ?)",
+        [userId, name, type, software_version || null, update_status || "up-to-date"],
+        (err) => {
+            if (err) return res.status(500).send("Fehler beim Speichern");
+
+            res.redirect("/devices");
+        }
+    );
+};
+
+exports.showEditForm = (req, res) => {
+    const deviceId = req.params.id;
+    const user = req.session.user;
+
+    db.get("SELECT * FROM devices WHERE id = ?", [deviceId], (err, device) => {
+        if (err || !device) return res.status(404).send("Gerät nicht gefunden");
+
+        if (user.role !== "admin" && device.user_id !== user.id) {
+            return forbidden(res);
+        }
+
+        res.render("edit-device", {
+            device,
+            user
+        });
+    });
+};
+
+exports.updateDevice = (req, res) => {
+    const deviceId = req.params.id;
+    const user = req.session.user;
+    const { name, type, software_version, update_status } = req.body;
+
+    db.get("SELECT * FROM devices WHERE id = ?", [deviceId], (err, device) => {
+        if (err || !device) return res.status(404).send("Gerät nicht gefunden");
+
+        if (user.role !== "admin" && device.user_id !== user.id) {
+            return forbidden(res);
+        }
+
+        db.run(
+            "UPDATE devices SET name = ?, type = ?, software_version = ?, update_status = ? WHERE id = ?",
+            [name, type, software_version, update_status, deviceId],
+            (err) => {
+                if (err) return res.status(500).send("Fehler beim Aktualisieren");
+
+                res.redirect("/devices");
+            }
+        );
+    });
+};
+
+exports.deleteDevice = (req, res) => {
+    const deviceId = req.params.id;
+    const user = req.session.user;
+
+    db.get("SELECT * FROM devices WHERE id = ?", [deviceId], (err, device) => {
+        if (err || !device) return res.status(404).send("Gerät nicht gefunden");
+
+        if (user.role !== "admin" && device.user_id !== user.id) {
+            return forbidden(res);
+        }
+
+        db.run("DELETE FROM devices WHERE id = ?", [deviceId], (err) => {
+            if (err) return res.status(500).send("Fehler beim Löschen");
+
+            res.redirect("/devices");
+        });
+    });
+};
