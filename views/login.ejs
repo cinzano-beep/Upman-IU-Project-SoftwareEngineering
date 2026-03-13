@@ -1,14 +1,110 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Login</title>
+    <title>Login – Update Manager</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #2c3e50, #3498db);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .login-card {
+            background: white;
+            padding: 40px;
+            width: 350px;
+            border-radius: 12px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+
+        .login-card h1 {
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .subtitle {
+            color: #777;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            font-size: 14px;
+            transition: 0.2s;
+        }
+
+        input:focus {
+            border-color: #3498db;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(52,152,219,0.2);
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        button:hover {
+            background: #2980b9;
+        }
+
+        .error {
+            background: #ffe6e6;
+            color: #e74c3c;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+
+        .footer {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #aaa;
+        }
+
+    </style>
 </head>
 <body>
-    <h2>Login</h2>
+
+<div class="login-card">
+    <h1>Update Manager</h1>
+    <div class="subtitle">Bitte anmelden</div>
+
+    <% if (typeof error !== 'undefined') { %>
+        <div class="error"><%= error %></div>
+    <% } %>
+
     <form method="POST" action="/login">
-        <input type="text" name="username" placeholder="Benutzername" required />
-        <input type="password" name="password" placeholder="Passwort" required />
-        <button type="submit">Login</button>
+        <input type="text" name="username" placeholder="Benutzername" required>
+        <input type="password" name="password" placeholder="Passwort" required>
+
+        <button type="submit">Anmelden</button>
     </form>
+
+    <div class="footer">
+        IU Software Engineering Projekt
+    </div>
+</div>
+
 </body>
 </html>
