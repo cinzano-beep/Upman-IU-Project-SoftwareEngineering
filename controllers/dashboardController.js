@@ -1,75 +1,104 @@
 const db = require("../config/db");
 const axios = require("axios");
 
-const NVD_API = "https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=5";
-
 exports.dashboard = async (req, res) => {
     const user = req.session.user;
 
+    if (!user) {
+        return res.redirect("/login");
+    }
+
     try {
-
         /* ============================= */
-        /* Geräte-Statistiken */
+        /* Geräte laden */
         /* ============================= */
-
-        let query = "";
-        let params = [];
-
-        if (user.role === "admin") {
-            query = "SELECT * FROM devices";
-        } else {
-            query = "SELECT * FROM devices WHERE user_id = ?";
-            params = [user.id];
-        }
 
         const devices = await new Promise((resolve, reject) => {
+
+            let query;
+            let params = [];
+
+            if (user.role === "admin") {
+                query = `
+                    SELECT devices.*, users.username
+                    FROM devices
+                    JOIN users ON devices.user_id = users.id
+                `;
+            } else {
+                query = `
+                    SELECT devices.*, users.username
+                    FROM devices
+                    JOIN users ON devices.user_id = users.id
+                    WHERE devices.user_id = ?
+                `;
+                params = [user.id];
+            }
+
             db.all(query, params, (err, rows) => {
                 if (err) reject(err);
                 else resolve(rows);
             });
         });
 
-        const stats = {
-            totalDevices: devices.length,
-            criticalDevices: devices.filter(d => d.update_status === "critical").length,
-            updateAvailableDevices: devices.filter(d => d.update_status === "update-available").length
-        };
-
         /* ============================= */
-        /* Benutzeranzahl (nur Admin) */
+        /* Statistik berechnen */
         /* ============================= */
 
-        let totalUsers = 0;
+        const totalDevices = devices.length;
+        const criticalCount = devices.filter(d => d.update_status === "critical").length;
+        const availableCount = devices.filter(d => d.update_status === "update-available").length;
+        const upToDateCount = devices.filter(d => d.update_status === "up-to-date").length;
 
-        if (user.role === "admin") {
-            totalUsers = await new Promise((resolve, reject) => {
-                db.get("SELECT COUNT(*) as count FROM users", (err, row) => {
-                    if (err) reject(err);
-                    else resolve(row.count);
+        /* ============================= */
+        /* NVD API Integration */
+        /* ============================= */
+
+        const apiKey = process.env.NVD_API_KEY;
+
+        let securityAlerts = [];
+
+        for (const device of devices) {
+
+            // Keyword bauen (Typ + Version)
+            const keyword = `${device.type || ""} ${device.software_version || ""}`.trim();
+
+            if (!keyword) continue;
+
+            try {
+                const response = await axios.get(
+                    `https://services.nvd.nist.gov/rest/json/cves/2.0`,
+                    {
+                        params: {
+                            keywordSearch: keyword,
+                            resultsPerPage: 3
+                        },
+                        headers: {
+                            "apiKey": apiKey
+                        }
+                    }
+                );
+
+                const vulnerabilities = response.data.vulnerabilities || [];
+
+                const deviceAlerts = vulnerabilities.slice(0, 3).map(v => {
+                    return {
+                        cveId: v.cve.id,
+                        description: v.cve.descriptions?.[0]?.value || "Keine Beschreibung verfügbar",
+                        published: v.cve.published
+                    };
                 });
-            });
-        }
 
-        /* ============================= */
-        /* NVD API – Aktuelle CVEs */
-        /* ============================= */
+                if (deviceAlerts.length > 0) {
+                    securityAlerts.push({
+                        deviceName: device.name,
+                        keyword,
+                        alerts: deviceAlerts
+                    });
+                }
 
-        let advisories = [];
-
-        try {
-            const response = await axios.get(NVD_API);
-
-            const cves = response.data.vulnerabilities;
-
-            advisories = cves.map(item => ({
-                id: item.cve.id,
-                description: item.cve.descriptions?.[0]?.value || "Keine Beschreibung verfügbar",
-                published: item.cve.published
-            }));
-
-        } catch (apiError) {
-            console.error("NVD API Fehler:", apiError.message);
-            advisories = [];
+            } catch (err) {
+                console.error("NVD API Fehler:", err.message);
+            }
         }
 
         /* ============================= */
@@ -78,14 +107,15 @@ exports.dashboard = async (req, res) => {
 
         res.render("dashboard", {
             user,
-            stats,
-            totalUsers,
-            advisories,
-            appName: "Upman"
+            totalDevices,
+            criticalCount,
+            availableCount,
+            upToDateCount,
+            securityAlerts
         });
 
-    } catch (error) {
-        console.error("Dashboard Fehler:", error);
+    } catch (err) {
+        console.error(err);
         res.status(500).send("Fehler beim Laden des Dashboards");
     }
 };
