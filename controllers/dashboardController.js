@@ -116,11 +116,11 @@ exports.dashboard = async (req, res) => {
                     break;
 
                 case "ios":
-                    apiParams.keywordSearch = "Apple iOS";
+                    apiParams.cpeName = "cpe:2.3:o:apple:iphone_os:-:*:*:*:*:*:*:*";
                     break;
-
+                    
                 case "ipad":
-                    apiParams.keywordSearch = "Apple iPadOS";
+                    apiParams.cpeName = "cpe:2.3:o:apple:ipad_os:-:*:*:*:*:*:*:*";
                     break;
 
                 case "android":
