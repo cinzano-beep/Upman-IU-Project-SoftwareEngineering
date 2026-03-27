@@ -1,9 +1,20 @@
 const db = require("../config/db");
 const axios = require("axios");
 
-/* ============================================= */
-/* Keyword Mapping */
-/* ============================================= */
+/* 🔐 NVD API KEY CHECK */
+
+
+const NVD_API_KEY = process.env.NVD_API_KEY;
+
+if (!NVD_API_KEY) {
+    console.error(" NVD_API_KEY ist NICHT gesetzt!");
+} else {
+    console.log(" NVD_API_KEY wurde geladen.");
+}
+
+
+/*  Keyword Mapping */
+
 
 function buildKeyword(device) {
     const combined = (
@@ -37,15 +48,18 @@ function buildKeyword(device) {
     return device.software_version || device.type || device.name;
 }
 
-/* ============================================= */
-/* Dashboard */
-/* ============================================= */
+
+/*  Dashboard */
+
 
 exports.dashboard = async (req, res) => {
+
     const user = req.session.user;
     if (!user) return res.redirect("/login");
 
     try {
+
+        /* Geräte laden */
 
         const devices = await new Promise((resolve, reject) => {
             let query;
@@ -73,28 +87,40 @@ exports.dashboard = async (req, res) => {
             });
         });
 
+        /* Statistik */
+
         const totalDevices = devices.length;
         const criticalCount = devices.filter(d => d.update_status === "critical").length;
         const availableCount = devices.filter(d => d.update_status === "update-available").length;
         const upToDateCount = devices.filter(d => d.update_status === "up-to-date").length;
 
-        const apiKey = process.env.NVD_API_KEY;
+        let securityAlerts = [];
 
-        if (!apiKey) {
-            console.error("NVD_API_KEY fehlt!");
+        if (!NVD_API_KEY) {
+            console.error(" Dashboard läuft ohne API Key!");
+            return res.render("dashboard", {
+                user,
+                totalDevices,
+                criticalCount,
+                availableCount,
+                upToDateCount,
+                securityAlerts
+            });
         }
 
         const fiveYearsAgo = new Date();
         fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
 
-        let securityAlerts = [];
+        /* Für jedes Gerät CVEs laden */
+     
 
         for (const device of devices) {
 
             const keyword = buildKeyword(device);
-            if (!keyword) continue;
+            console.log("🔎 Suche CVEs für:", keyword);
 
             try {
+
                 const response = await axios.get(
                     "https://services.nvd.nist.gov/rest/json/cves/2.0",
                     {
@@ -103,14 +129,18 @@ exports.dashboard = async (req, res) => {
                             resultsPerPage: 10
                         },
                         headers: {
-                            "X-Api-Key": apiKey
-                        }
+                            "X-Api-Key": NVD_API_KEY
+                        },
+                        timeout: 10000
                     }
                 );
 
-                const vulnerabilities = response.data.vulnerabilities || [];
+                if (!response.data || !response.data.vulnerabilities) {
+                    console.log("⚠️ Keine Vulnerabilities erhalten.");
+                    continue;
+                }
 
-                const filtered = vulnerabilities
+                const filtered = response.data.vulnerabilities
                     .filter(v => {
                         const publishedDate = new Date(v.cve.published);
                         return publishedDate >= fiveYearsAgo;
@@ -130,8 +160,17 @@ exports.dashboard = async (req, res) => {
                     });
                 }
 
+                // kleine Pause gegen Rate Limit
+                await new Promise(r => setTimeout(r, 800));
+
             } catch (err) {
-                console.error("NVD API Fehler:", err.response?.data || err.message);
+
+                if (err.response) {
+                    console.error(" NVD API Fehler Status:", err.response.status);
+                    console.error(" Antwort:", err.response.data);
+                } else {
+                    console.error(" Request Fehler:", err.message);
+                }
             }
         }
 
@@ -145,7 +184,7 @@ exports.dashboard = async (req, res) => {
         });
 
     } catch (err) {
-        console.error(err);
+        console.error(" Dashboard Fehler:", err);
         res.status(500).send("Fehler beim Laden des Dashboards");
     }
 };
