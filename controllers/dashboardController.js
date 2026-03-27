@@ -100,13 +100,13 @@ exports.dashboard = async (req, res) => {
             switch (platform) {
 
                 case "windows11":
-                    apiParams.cpeName = "cpe:2.3:o:microsoft:windows_11";
+                    apiParams.cpeName = "cpe:2.3:o:microsoft:windows_11:-:*:*:*:*:*:*:*";
                     break;
-
+            
                 case "windows10":
-                    apiParams.cpeName = "cpe:2.3:o:microsoft:windows_10";
+                    apiParams.cpeName = "cpe:2.3:o:microsoft:windows_10:-:*:*:*:*:*:*:*";
                     break;
-
+            
                 case "windows":
                     apiParams.keywordSearch = "Microsoft Windows";
                     break;
