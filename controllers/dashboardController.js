@@ -1,9 +1,9 @@
 const db = require("../config/db");
 const axios = require("axios");
 
-
+/* ============================================= */
 /* Keyword Mapping */
-
+/* ============================================= */
 
 function buildKeyword(device) {
     const combined = (
@@ -34,24 +34,20 @@ function buildKeyword(device) {
         }
     }
 
-    // Fallback
     return device.software_version || device.type || device.name;
 }
 
-
-/* Dashboard Controller */
-
+/* ============================================= */
+/* Dashboard */
+/* ============================================= */
 
 exports.dashboard = async (req, res) => {
     const user = req.session.user;
-
-    if (!user) {
-        return res.redirect("/login");
-    }
+    if (!user) return res.redirect("/login");
 
     try {
-        const devices = await new Promise((resolve, reject) => {
 
+        const devices = await new Promise((resolve, reject) => {
             let query;
             let params = [];
 
@@ -83,6 +79,11 @@ exports.dashboard = async (req, res) => {
         const upToDateCount = devices.filter(d => d.update_status === "up-to-date").length;
 
         const apiKey = process.env.NVD_API_KEY;
+
+        if (!apiKey) {
+            console.error("NVD_API_KEY fehlt!");
+        }
+
         const fiveYearsAgo = new Date();
         fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
 
@@ -95,14 +96,14 @@ exports.dashboard = async (req, res) => {
 
             try {
                 const response = await axios.get(
-                    `https://services.nvd.nist.gov/rest/json/cves/2.0`,
+                    "https://services.nvd.nist.gov/rest/json/cves/2.0",
                     {
                         params: {
                             keywordSearch: keyword,
                             resultsPerPage: 10
                         },
                         headers: {
-                            "apiKey": apiKey
+                            "X-Api-Key": apiKey
                         }
                     }
                 );
@@ -130,7 +131,7 @@ exports.dashboard = async (req, res) => {
                 }
 
             } catch (err) {
-                console.error("NVD API Fehler:", err.message);
+                console.error("NVD API Fehler:", err.response?.data || err.message);
             }
         }
 
