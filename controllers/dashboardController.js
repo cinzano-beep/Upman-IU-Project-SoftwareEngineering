@@ -1,9 +1,6 @@
 const db = require("../config/db");
 const axios = require("axios");
 
-/* 🔐 NVD API KEY CHECK */
-
-
 const NVD_API_KEY = process.env.NVD_API_KEY;
 
 if (!NVD_API_KEY) {
@@ -12,45 +9,30 @@ if (!NVD_API_KEY) {
     console.log(" NVD_API_KEY wurde geladen.");
 }
 
+/*  Keyword + CPE Mapping */
 
-/*  Keyword Mapping */
-
-
-function buildKeyword(device) {
+function detectPlatform(device) {
     const combined = (
         (device.name || "") + " " +
         (device.type || "") + " " +
         (device.software_version || "")
     ).toLowerCase();
 
-    const keywordMap = [
-        { match: ["windows 11"], keyword: "Windows 11" },
-        { match: ["windows 10"], keyword: "Windows 10" },
-        { match: ["windows"], keyword: "Microsoft Windows" },
+    if (combined.includes("windows 11")) return "windows11";
+    if (combined.includes("windows 10")) return "windows10";
+    if (combined.includes("windows")) return "windows";
 
-        { match: ["macos", "os x"], keyword: "macOS" },
+    if (combined.includes("macos") || combined.includes("os x")) return "macos";
 
-        { match: ["iphone"], keyword: "iOS" },
-        { match: ["ipad"], keyword: "iPadOS" },
-        { match: ["ios"], keyword: "iOS" },
+    if (combined.includes("iphone") || combined.includes("ios")) return "ios";
+    if (combined.includes("ipad")) return "ipad";
 
-        { match: ["samsung"], keyword: "Android" },
-        { match: ["huawei"], keyword: "Android" },
-        { match: ["android"], keyword: "Android" }
-    ];
+    if (combined.includes("android") || combined.includes("samsung") || combined.includes("huawei")) return "android";
 
-    for (const entry of keywordMap) {
-        if (entry.match.some(term => combined.includes(term))) {
-            return entry.keyword;
-        }
-    }
-
-    return device.software_version || device.type || device.name;
+    return "unknown";
 }
 
-
 /*  Dashboard */
-
 
 exports.dashboard = async (req, res) => {
 
@@ -58,8 +40,6 @@ exports.dashboard = async (req, res) => {
     if (!user) return res.redirect("/login");
 
     try {
-
-        /* Geräte laden */
 
         const devices = await new Promise((resolve, reject) => {
             let query;
@@ -87,8 +67,6 @@ exports.dashboard = async (req, res) => {
             });
         });
 
-        /* Statistik */
-
         const totalDevices = devices.length;
         const criticalCount = devices.filter(d => d.update_status === "critical").length;
         const availableCount = devices.filter(d => d.update_status === "update-available").length;
@@ -97,7 +75,6 @@ exports.dashboard = async (req, res) => {
         let securityAlerts = [];
 
         if (!NVD_API_KEY) {
-            console.error(" Dashboard läuft ohne API Key!");
             return res.render("dashboard", {
                 user,
                 totalDevices,
@@ -111,23 +88,55 @@ exports.dashboard = async (req, res) => {
         const fiveYearsAgo = new Date();
         fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
 
-        /* Für jedes Gerät CVEs laden */
-     
-
         for (const device of devices) {
 
-            const keyword = buildKeyword(device);
-            console.log("🔎 Suche CVEs für:", keyword);
+            const platform = detectPlatform(device);
+            console.log(" Plattform erkannt:", platform);
+
+            let apiParams = { resultsPerPage: 20 };
+
+            /* ===== CPE Mapping ===== */
+
+            switch (platform) {
+
+                case "windows11":
+                    apiParams.cpeName = "cpe:2.3:o:microsoft:windows_11";
+                    break;
+
+                case "windows10":
+                    apiParams.cpeName = "cpe:2.3:o:microsoft:windows_10";
+                    break;
+
+                case "windows":
+                    apiParams.keywordSearch = "Microsoft Windows";
+                    break;
+
+                case "macos":
+                    apiParams.keywordSearch = "Apple macOS";
+                    break;
+
+                case "ios":
+                    apiParams.keywordSearch = "Apple iOS";
+                    break;
+
+                case "ipad":
+                    apiParams.keywordSearch = "Apple iPadOS";
+                    break;
+
+                case "android":
+                    apiParams.keywordSearch = "Android";
+                    break;
+
+                default:
+                    apiParams.keywordSearch = device.software_version || device.name;
+            }
 
             try {
 
                 const response = await axios.get(
                     "https://services.nvd.nist.gov/rest/json/cves/2.0",
                     {
-                        params: {
-                            keywordSearch: keyword,
-                            resultsPerPage: 10
-                        },
+                        params: apiParams,
                         headers: {
                             "X-Api-Key": NVD_API_KEY
                         },
@@ -135,12 +144,9 @@ exports.dashboard = async (req, res) => {
                     }
                 );
 
-                if (!response.data || !response.data.vulnerabilities) {
-                    console.log("⚠️ Keine Vulnerabilities erhalten.");
-                    continue;
-                }
+                const vulnerabilities = response.data.vulnerabilities || [];
 
-                const filtered = response.data.vulnerabilities
+                const filtered = vulnerabilities
                     .filter(v => {
                         const publishedDate = new Date(v.cve.published);
                         return publishedDate >= fiveYearsAgo;
@@ -155,19 +161,19 @@ exports.dashboard = async (req, res) => {
                 if (filtered.length > 0) {
                     securityAlerts.push({
                         deviceName: device.name,
-                        keyword,
+                        platform,
                         alerts: filtered
                     });
                 }
 
-                // kleine Pause gegen Rate Limit
+                // Rate limit protection
                 await new Promise(r => setTimeout(r, 800));
 
             } catch (err) {
 
                 if (err.response) {
-                    console.error(" NVD API Fehler Status:", err.response.status);
-                    console.error(" Antwort:", err.response.data);
+                    console.error(" NVD Fehler:", err.response.status);
+                    console.error(err.response.data);
                 } else {
                     console.error(" Request Fehler:", err.message);
                 }
