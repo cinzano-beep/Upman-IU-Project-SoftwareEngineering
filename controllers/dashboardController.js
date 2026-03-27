@@ -1,6 +1,47 @@
 const db = require("../config/db");
 const axios = require("axios");
 
+
+/* Keyword Mapping */
+
+
+function buildKeyword(device) {
+    const combined = (
+        (device.name || "") + " " +
+        (device.type || "") + " " +
+        (device.software_version || "")
+    ).toLowerCase();
+
+    const keywordMap = [
+        { match: ["windows 11"], keyword: "Windows 11" },
+        { match: ["windows 10"], keyword: "Windows 10" },
+        { match: ["windows"], keyword: "Microsoft Windows" },
+
+        { match: ["macos", "os x"], keyword: "macOS" },
+
+        { match: ["iphone"], keyword: "iOS" },
+        { match: ["ipad"], keyword: "iPadOS" },
+        { match: ["ios"], keyword: "iOS" },
+
+        { match: ["samsung"], keyword: "Android" },
+        { match: ["huawei"], keyword: "Android" },
+        { match: ["android"], keyword: "Android" }
+    ];
+
+    for (const entry of keywordMap) {
+        if (entry.match.some(term => combined.includes(term))) {
+            return entry.keyword;
+        }
+    }
+
+    // Fallback
+    return device.software_version || device.type || device.name;
+}
+
+
+/* Dashboard Controller */
+
+
 exports.dashboard = async (req, res) => {
     const user = req.session.user;
 
@@ -9,10 +50,6 @@ exports.dashboard = async (req, res) => {
     }
 
     try {
-        /* ============================= */
-        /* Geräte laden */
-        /* ============================= */
-
         const devices = await new Promise((resolve, reject) => {
 
             let query;
@@ -40,28 +77,20 @@ exports.dashboard = async (req, res) => {
             });
         });
 
-        /* ============================= */
-        /* Statistik berechnen */
-        /* ============================= */
-
         const totalDevices = devices.length;
         const criticalCount = devices.filter(d => d.update_status === "critical").length;
         const availableCount = devices.filter(d => d.update_status === "update-available").length;
         const upToDateCount = devices.filter(d => d.update_status === "up-to-date").length;
 
-        /* ============================= */
-        /* NVD API Integration */
-        /* ============================= */
-
         const apiKey = process.env.NVD_API_KEY;
+        const fiveYearsAgo = new Date();
+        fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
 
         let securityAlerts = [];
 
         for (const device of devices) {
 
-            // Keyword bauen (Typ + Version)
-            const keyword = `${device.type || ""} ${device.software_version || ""}`.trim();
-
+            const keyword = buildKeyword(device);
             if (!keyword) continue;
 
             try {
@@ -70,7 +99,7 @@ exports.dashboard = async (req, res) => {
                     {
                         params: {
                             keywordSearch: keyword,
-                            resultsPerPage: 3
+                            resultsPerPage: 10
                         },
                         headers: {
                             "apiKey": apiKey
@@ -80,19 +109,23 @@ exports.dashboard = async (req, res) => {
 
                 const vulnerabilities = response.data.vulnerabilities || [];
 
-                const deviceAlerts = vulnerabilities.slice(0, 3).map(v => {
-                    return {
+                const filtered = vulnerabilities
+                    .filter(v => {
+                        const publishedDate = new Date(v.cve.published);
+                        return publishedDate >= fiveYearsAgo;
+                    })
+                    .slice(0, 3)
+                    .map(v => ({
                         cveId: v.cve.id,
                         description: v.cve.descriptions?.[0]?.value || "Keine Beschreibung verfügbar",
                         published: v.cve.published
-                    };
-                });
+                    }));
 
-                if (deviceAlerts.length > 0) {
+                if (filtered.length > 0) {
                     securityAlerts.push({
                         deviceName: device.name,
                         keyword,
-                        alerts: deviceAlerts
+                        alerts: filtered
                     });
                 }
 
@@ -100,10 +133,6 @@ exports.dashboard = async (req, res) => {
                 console.error("NVD API Fehler:", err.message);
             }
         }
-
-        /* ============================= */
-        /* Render */
-        /* ============================= */
 
         res.render("dashboard", {
             user,
